@@ -35,6 +35,8 @@ class SocketService {
         if (this.socket) {
           this.cleanup(CLEANUP_REASONS.RECONNECT);
         }
+        
+        const socketUrl = process.env.NEXT_PUBLIC_API_URL;
 
         const token = localStorage.getItem('accessToken');
 
