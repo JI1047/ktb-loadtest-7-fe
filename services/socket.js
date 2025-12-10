@@ -35,22 +35,22 @@ class SocketService {
         if (this.socket) {
           this.cleanup(CLEANUP_REASONS.RECONNECT);
         }
-        
+
         const socketUrl = process.env.NEXT_PUBLIC_API_URL;
 
         const token = localStorage.getItem('accessToken');
+        const sessionId = localStorage.getItem('sessionId');
 
         this.socket = io(socketUrl, {
           transports: ['websocket', 'polling'],
           auth: {
             token: token ? `Bearer ${token}` : null,
+            sessionId,
           },
           reconnection: true,
           reconnectionAttempts: this.maxReconnectAttempts,
           reconnectionDelay: this.retryDelay,
-          reconnectionDelayMax: 5000,
           timeout: 20000,
-          forceNew: true,
         });
 
 
@@ -79,13 +79,16 @@ class SocketService {
       this.reconnectAttempts = 0;
       this.isReconnecting = false;
       clearTimeout(connectionTimeout);
-      this.startHeartbeat();
+      // this.startHeartbeat();
       resolve(this.socket);
     });
 
     this.socket.on('disconnect', (reason) => {
       this.connected = false;
-      this.cleanup(CLEANUP_REASONS.DISCONNECT);
+// ✅ 서버가 명시적으로 끊은 경우만 완전 cleanup
+      if (reason === 'io server disconnect') {
+        this.cleanup(CLEANUP_REASONS.MANUAL);
+      }    
     });
 
     this.socket.on('connect_error', (error) => {
@@ -171,52 +174,52 @@ class SocketService {
     }
   }
 
-  handleConnectionError(error) {
-    this.reconnectAttempts++;
+  // handleConnectionError(error) {
+  //   this.reconnectAttempts++;
 
-    if (error.message.includes('auth')) {
-      return;
-    }
+  //   if (error.message.includes('auth')) {
+  //     return;
+  //   }
 
-    if (error.message.includes('websocket error')) {
-      if (this.socket) {
-        this.socket.io.opts.transports = ['polling', 'websocket'];
-      }
-    }
+  //   if (error.message.includes('websocket error')) {
+  //     if (this.socket) {
+  //       this.socket.io.opts.transports = ['polling', 'websocket'];
+  //     }
+  //   }
 
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      this.cleanup(CLEANUP_REASONS.MANUAL);
-      this.isReconnecting = false;
-    }
-  }
+  //   if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+  //     this.cleanup(CLEANUP_REASONS.MANUAL);
+  //     this.isReconnecting = false;
+  //   }
+  // }
 
-  handleSocketError(error) {
-    if (error.type === 'TransportError') {
-      this.reconnect();
-    }
-  }
+  // handleSocketError(error) {
+  //   if (error.type === 'TransportError') {
+  //     this.reconnect();
+  //   }
+  // }
 
-  startHeartbeat() {
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval);
-    }
+  // startHeartbeat() {
+  //   if (this.heartbeatInterval) {
+  //     clearInterval(this.heartbeatInterval);
+  //   }
 
-    this.heartbeatInterval = setInterval(() => {
-      if (this.socket?.connected) {
-        this.socket.emit('ping', null, (error) => {
-          if (error) {
-            this.cleanup(CLEANUP_REASONS.MANUAL);
-          }
-        });
-      } else {
-        this.cleanup(CLEANUP_REASONS.MANUAL);
-      }
-    }, 25000);
-  }
+  //   this.heartbeatInterval = setInterval(() => {
+  //     if (this.socket?.connected) {
+  //       this.socket.emit('ping', null, (error) => {
+  //         if (error) {
+  //           this.cleanup(CLEANUP_REASONS.MANUAL);
+  //         }
+  //       });
+  //     } else {
+  //       this.cleanup(CLEANUP_REASONS.MANUAL);
+  //     }
+  //   }, 25000);
+  // }
 
-  getSocket() {
-    return this.socket;
-  }
+  // getSocket() {
+  //   return this.socket;
+  // }
 
   queueMessage(event, data) {
     const message = { event, data, timestamp: Date.now() };
