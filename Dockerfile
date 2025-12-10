@@ -1,45 +1,48 @@
+# ===============================
 # Stage 1: Builder
-FROM node:22-alpine AS builder
+# ===============================
+FROM node:20-alpine AS builder
 WORKDIR /app
 
-# ✅ 빌드 타임 환경변수 선언
+# 빌드 타임 환경변수
 ARG NEXT_PUBLIC_API_URL
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 
-# 패키지 파일 복사
-COPY package.json ./
+# package 파일만 먼저 복사 (캐시 최적화)
+COPY package.json package-lock.json ./
 
-# 의존성 설치
-RUN npm install
+# ✅ npm ci (더 빠르고 정확)
+RUN npm ci
 
-# 소스 코드 복사
+# 소스 복사
 COPY . .
 
-# ✅ Next.js 빌드 (여기서 env가 박힘)
+# Next.js 빌드
 RUN npm run build
 
 
-# Stage 2: Runner
-FROM node:22-alpine AS runner
+# ===============================
+# Stage 2: Runner (최소 런타임)
+# ===============================
+FROM node:20-alpine AS runner
 WORKDIR /app
 
-# 보안을 위한 non-root 사용자 생성
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 nextjs
+# non-root 유저
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nextjs -u 1001
 
-# 필요한 파일만 복사
+# ✅ standalone 결과물만 복사
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 
-# 권한 설정
+# 권한 정리
 RUN chown -R nextjs:nodejs /app
 
 USER nextjs
 
-EXPOSE 3000
-
-ENV PORT=3000
 ENV NODE_ENV=production
+ENV PORT=3000
 
+EXPOSE 3000
 CMD ["node", "server.js"]
