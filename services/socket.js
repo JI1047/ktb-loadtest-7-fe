@@ -36,18 +36,21 @@ class SocketService {
           this.cleanup(CLEANUP_REASONS.RECONNECT);
         }
 
-        const socketUrl = process.env.NEXT_PUBLIC_API_URL;
+        const token = localStorage.getItem('accessToken');
 
         this.socket = io(socketUrl, {
-          ...options,
           transports: ['websocket', 'polling'],
+          auth: {
+            token: token ? `Bearer ${token}` : null,
+          },
           reconnection: true,
           reconnectionAttempts: this.maxReconnectAttempts,
           reconnectionDelay: this.retryDelay,
           reconnectionDelayMax: 5000,
           timeout: 20000,
-          forceNew: true
+          forceNew: true,
         });
+
 
         this.setupEventHandlers(resolve, reject);
 
