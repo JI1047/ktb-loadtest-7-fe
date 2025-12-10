@@ -61,6 +61,6 @@ jobs:
         run: |
           ssh -i ~/.ssh/id_rsa ubuntu@${{ secrets.FE_PUBLIC_HOST }} << 'EOF'
             cd /home/ubuntu/frontend
-            docker-compose pull
-            docker-compose up -d
+            docker compose pull
+            docker compose up -d
           EOF
