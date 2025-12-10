@@ -540,7 +540,7 @@ function ChatRoomsComponent() {
     };
   }, [currentUser]);
 
-  const handleJoinRoom = async (roomId) => {
+  const handleJoinRoom = async (room) => {
     if (connectionStatus !== CONNECTION_STATUS.CONNECTED) {
       setError({
         title: '채팅방 입장 실패',
@@ -550,15 +550,28 @@ function ChatRoomsComponent() {
       return;
     }
 
+    let password = null;
+
+    //비밀번호 필요한 방이면 입력받기
+    if (room.hasPassword) {
+      password = prompt("이 방의 비밀번호를 입력하세요:");
+      if (!password) {
+        Toast.error("비밀번호가 필요합니다.");
+        return;
+      }
+    }
+
     setJoiningRoom(true);
 
     try {
-      const response = await axiosInstance.post(`/api/rooms/${roomId}/join`, {}, {
-        timeout: 5000
-      });
+      const response = await axiosInstance.post(
+        `/api/rooms/${room._id}/join`,
+        room.hasPassword ? { password } : {},   // ⬅ 여기서 중요!
+        { timeout: 5000 }
+      );
 
       if (response.data.success) {
-        router.push(`/chat/${roomId}`);
+        router.push(`/chat/${room._id}`);
       }
     } catch (error) {
       let errorMessage = '입장에 실패했습니다.';
@@ -566,6 +579,8 @@ function ChatRoomsComponent() {
         errorMessage = '채팅방을 찾을 수 없습니다.';
       } else if (error.response?.status === 403) {
         errorMessage = '채팅방 입장 권한이 없습니다.';
+      } else if (error.response?.status === 401) {
+        errorMessage = '비밀번호가 일치하지 않습니다.';
       }
 
       setError({
@@ -577,6 +592,7 @@ function ChatRoomsComponent() {
       setJoiningRoom(false);
     }
   };
+
 
   const renderRoomsTable = () => {
     if (!rooms || rooms.length === 0) return null;
@@ -653,7 +669,7 @@ function ChatRoomsComponent() {
                   colorPalette="primary"
                   // variant="outline"
                   size="md"
-                  onClick={() => handleJoinRoom(room._id)}
+                  onClick={() => handleJoinRoom(room)}
                   disabled={connectionStatus !== CONNECTION_STATUS.CONNECTED}
                   data-testid={`join-chat-room-button`}
                 >
@@ -770,34 +786,10 @@ function ChatRoomsComponent() {
       </VStack>
     </Box>
   );
+
 }
 
-const ChatRooms = dynamic(() => Promise.resolve(ChatRoomsComponent), {
-  ssr: false,
-  loading: () => (
-    <Box
-      display="flex"
-      justifyContent="center"
-      alignItems="center"
-      minHeight="100vh"
-      padding="$300"
-    >
-      <VStack
-        gap="$400"
-        width="100%"
-        maxWidth="1200px"
-        padding="$400"
-        borderRadius="$300"
-        border="1px solid var(--vapor-color-border-normal)"
-        backgroundColor="var(--vapor-color-surface-raised)"
-      >
-        <Text typography="heading3" textAlign="center">채팅방 목록</Text>
-        <Box padding="$400">
-          <LoadingIndicator text="로딩 중..." />
-        </Box>
-      </VStack>
-    </Box>
-  )
-});
 
-export default withAuth(ChatRooms);
+
+
+export default withAuth(ChatRoomsComponent);
