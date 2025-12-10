@@ -36,16 +36,31 @@ class SocketService {
           this.cleanup(CLEANUP_REASONS.RECONNECT);
         }
 
-        const socketUrl = window.location.origin;
+        const userFromStorage = JSON.parse(localStorage.getItem('user') || '{}');
+        const token = options.auth?.token ?? userFromStorage.token;
+        const sessionId = options.auth?.sessionId ?? userFromStorage.sessionId;
 
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        if (!token || !sessionId) {
+          throw new Error('Authentication required for socket connection');
+        }
+
+        const socketUrl = options.url || process.env.NEXT_PUBLIC_SOCKET_URL || window.location.origin;
+        const auth = { token, sessionId };
+        const query = { token, sessionId, ...(options.query || {}) };
+
+        if (options.auth) {
+          Object.entries(options.auth).forEach(([key, value]) => {
+            if (value !== undefined) auth[key] = value;
+          });
+        }
+
+        const { url, ...restOptions } = options;
 
         this.socket = io(socketUrl, {
           transports: ['websocket'],
-          query: {
-            token: user.token,
-            sessionId: user.sessionId,
-          },
+          ...restOptions,
+          auth,
+          query
         });
 
 
