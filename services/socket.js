@@ -42,16 +42,15 @@ class SocketService {
         const sessionId = localStorage.getItem('sessionId');
 
         this.socket = io(socketUrl, {
-          transports: ['websocket', 'polling'],
-          auth: {
-            token: token ? `Bearer ${token}` : null,
-            sessionId,
+          transports: ['websocket'],
+          query: {
+            token: localStorage.getItem('accessToken'),
+            sessionId: localStorage.getItem('sessionId'),
           },
           reconnection: true,
-          reconnectionAttempts: this.maxReconnectAttempts,
-          reconnectionDelay: this.retryDelay,
           timeout: 20000,
         });
+
 
 
         this.setupEventHandlers(resolve, reject);
