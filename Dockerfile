@@ -2,17 +2,22 @@
 FROM node:22-alpine AS builder
 WORKDIR /app
 
+# ✅ 빌드 타임 환경변수 선언
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
 # 패키지 파일 복사
 COPY package.json ./
 
-# 의존성 설치 (빌드에 필요한 devDependencies 포함)
-RUN npm i
+# 의존성 설치
+RUN npm install
 
 # 소스 코드 복사
 COPY . .
 
-# Next.js 빌드
+# ✅ Next.js 빌드 (여기서 env가 박힘)
 RUN npm run build
+
 
 # Stage 2: Runner
 FROM node:22-alpine AS runner
@@ -27,7 +32,7 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 
-# 파일 권한 설정
+# 권한 설정
 RUN chown -R nextjs:nodejs /app
 
 USER nextjs
