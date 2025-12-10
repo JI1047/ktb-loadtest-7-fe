@@ -36,20 +36,18 @@ class SocketService {
           this.cleanup(CLEANUP_REASONS.RECONNECT);
         }
 
-        const socketUrl = process.env.NEXT_PUBLIC_API_URL;
+        const socketUrl = window.location.origin;
 
-        const token = localStorage.getItem('accessToken');
-        const sessionId = localStorage.getItem('sessionId');
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
 
         this.socket = io(socketUrl, {
           transports: ['websocket'],
           query: {
-            token: localStorage.getItem('accessToken'),
-            sessionId: localStorage.getItem('sessionId'),
+            token: user.token,
+            sessionId: user.sessionId,
           },
-          reconnection: true,
-          timeout: 20000,
         });
+
 
 
 
