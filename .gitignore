@@ -36,3 +36,5 @@ logs
 .cache/
 .parcel-cache/
 .next/cache/
+.env
+.env.*
