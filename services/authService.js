@@ -226,7 +226,7 @@ class AuthService {
       }
 
       const response = await axios.put(
-        `${API_URL}/api/users/password`,
+        `${API_URL}/api/users/profile`,
         {
           currentPassword,
           newPassword
