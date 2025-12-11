@@ -102,7 +102,6 @@ class AuthService {
 
   /**
    * 로그인 API 호출
-   * 
    * 상태 관리는 AuthContext에서 처리
    */
   async login(credentials) {
