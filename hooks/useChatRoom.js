@@ -80,7 +80,16 @@ export const useChatRoom = () => {
     getFilteredParticipants,
     insertMention,
     removeFilePreview
-  } = useMessageHandling(socketRef, currentUser, router, undefined, messages, loadingMessages, setLoadingMessages);
+  } = useMessageHandling(
+    socketRef,
+    currentUser,
+    router,
+    undefined,
+    messages,
+    loadingMessages,
+    setLoadingMessages,
+    setMessages
+  );
 
   // Cleanup 함수 수정
   const cleanup = useCallback((reason = 'MANUAL') => {
@@ -210,6 +219,8 @@ export const useChatRoom = () => {
   const setupEventListeners = useCallback(() => {
     if (!socketRef.current || !mountedRef.current) return;
 
+    const getSenderId = (msg) => msg?.sender?._id || msg?.sender?.id || msg?.sender;
+
     // 참가자 업데이트 이벤트
     socketRef.current.on('participantsUpdate', (participants) => {
       if (!mountedRef.current) return;
@@ -261,7 +272,26 @@ export const useChatRoom = () => {
         if (isDuplicate) {
           return prev;
         }
-        return [...prev, message];
+
+        const senderId = getSenderId(message);
+        const filtered = prev.filter(msg => {
+          if (!msg?.optimistic) return true;
+          const optimisticSender = getSenderId(msg);
+          if (optimisticSender !== senderId) return true;
+          if (msg.type !== message.type) return true;
+
+          if (msg.type === 'text') {
+            return msg.content !== message.content;
+          }
+
+          if (msg.type === 'file') {
+            return msg.file?.filename !== message.file?.filename;
+          }
+
+          return true;
+        });
+
+        return [...filtered, message];
       });
     });
 
@@ -314,6 +344,7 @@ export const useChatRoom = () => {
 
       // 금칙어 메시지 거부 처리
       if (error?.code === 'MESSAGE_REJECTED') {
+        setMessages(prev => prev.filter(msg => !msg.optimistic));
         Toast.error(
           error.message || '금칙어가 포함되어 메시지를 전송할 수 없습니다.',
           { toastId: 'toast-error' }
@@ -321,7 +352,8 @@ export const useChatRoom = () => {
         return;
       }
 
-      setError(error.message || '채팅 연결에 문제가 발생했습니다.');
+      // 일반 소켓 오류는 토스트로만 알리고 UI는 유지
+      Toast.error(error.message || '채팅 연결에 문제가 발생했습니다.');
     });
 
   }, [processMessages, setHasMoreMessages, cleanup, handleReactionUpdate, setLoadingMessages, setError, logout]);

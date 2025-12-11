@@ -212,8 +212,20 @@ class SocketService {
   // }
 
   handleSocketError(error) {
-    // Gracefully log socket errors; other listeners (e.g., per-page handlers) will handle user feedback
+    // Gracefully log socket errors; also surface common user-facing cases
     console.warn('Socket error event:', error);
+
+    if (error?.code === 'MESSAGE_REJECTED') {
+      // Import on-demand to avoid circular deps on server render
+      import('../components/Toast').then(({ Toast }) => {
+        Toast.error(
+          error.message || '금칙어가 포함되어 메시지를 전송할 수 없습니다.',
+          { toastId: 'toast-error' }
+        );
+      }).catch(() => {
+        // ignore import failures (e.g., SSR)
+      });
+    }
   }
 
   // startHeartbeat() {

@@ -2,7 +2,16 @@ import { useState, useCallback } from 'react';
 import { Toast } from '../components/Toast';
 import fileService from '../services/fileService';
 
-export const useMessageHandling = (socketRef, currentUser, router, handleSessionError, messages = [], loadingMessages = false, setLoadingMessages) => {
+export const useMessageHandling = (
+  socketRef,
+  currentUser,
+  router,
+  handleSessionError,
+  messages = [],
+  loadingMessages = false,
+  setLoadingMessages,
+  setMessages
+) => {
  const [message, setMessage] = useState('');
  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
  const [showMentionList, setShowMentionList] = useState(false);
@@ -80,6 +89,32 @@ export const useMessageHandling = (socketRef, currentUser, router, handleSession
     socketRef.current.once('error', handleError);
   }, [socketRef]);
 
+  const appendOptimisticMessage = useCallback((payload) => {
+    if (!setMessages || !currentUser) return null;
+
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const optimisticMessage = {
+      _id: tempId,
+      ...payload,
+      sender: currentUser?._id ? {
+        _id: currentUser._id,
+        id: currentUser.id || currentUser._id,
+        name: currentUser.name,
+        email: currentUser.email
+      } : {
+        _id: currentUser?.id,
+        id: currentUser?.id,
+        name: currentUser?.name,
+        email: currentUser?.email
+      },
+      timestamp: new Date().toISOString(),
+      optimistic: true
+    };
+
+    setMessages(prev => [...prev, optimisticMessage]);
+    return tempId;
+  }, [currentUser, setMessages]);
+
  const handleMessageSubmit = useCallback(async (messageData) => {
    if (!socketRef.current?.connected || !currentUser) {
      Toast.error('채팅 서버와 연결이 끊어졌습니다.');
@@ -105,15 +140,23 @@ export const useMessageHandling = (socketRef, currentUser, router, handleSession
           currentUser.sessionId
         );
 
-       if (!uploadResponse.success) {
-         throw new Error(uploadResponse.message || '파일 업로드에 실패했습니다.');
-       }
+      if (!uploadResponse.success) {
+        throw new Error(uploadResponse.message || '파일 업로드에 실패했습니다.');
+      }
 
-       attachMessageRejectionListener();
+      attachMessageRejectionListener();
+       const optimisticId = appendOptimisticMessage({
+         type: 'file',
+         content: messageData.content || '',
+         file: {
+           ...uploadResponse.data.file
+         }
+       });
        socketRef.current.emit('chatMessage', {
          room: roomId,
          type: 'file',
          content: messageData.content || '',
+         clientId: optimisticId,
          fileData: {
            _id: uploadResponse.data.file._id,
            filename: uploadResponse.data.file.filename,
@@ -130,10 +173,15 @@ export const useMessageHandling = (socketRef, currentUser, router, handleSession
 
      } else if (messageData.content?.trim()) {
        attachMessageRejectionListener();
+       const optimisticId = appendOptimisticMessage({
+         type: 'text',
+         content: messageData.content.trim()
+       });
        socketRef.current.emit('chatMessage', {
          room: roomId,
          type: 'text',
-         content: messageData.content.trim()
+         content: messageData.content.trim(),
+         clientId: optimisticId
        });
 
        setMessage('');
@@ -156,7 +204,7 @@ export const useMessageHandling = (socketRef, currentUser, router, handleSession
        setUploading(false);
      }
    }
- }, [currentUser, router, handleSessionError, socketRef, attachMessageRejectionListener]);
+ }, [currentUser, router, handleSessionError, socketRef, attachMessageRejectionListener, appendOptimisticMessage]);
 
  const handleEmojiToggle = useCallback(() => {
    setShowEmojiPicker(prev => !prev);
