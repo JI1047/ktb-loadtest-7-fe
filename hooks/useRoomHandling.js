@@ -341,14 +341,7 @@ export const useRoomHandling = (
         setError(null);
         messageRetryCountRef.current = 0;
 
-        // 1. Socket Setup
-        socketRef.current = await setupSocket()
-          .catch((error) => {
-            console.log('Socket setup error:', error);
-            router.push('/_error');
-          });
-
-        // 2. Fetch Room Data
+        // 1. Fetch Room Data 먼저 수행하여 초기 로딩과 소켓 연결 타이밍을 분리
         const roomData = await fetchRoomData(router.query.room);
         
         // Ensure current user is included in participants for display
@@ -372,8 +365,15 @@ export const useRoomHandling = (
         
         setRoom(roomData);
 
+        // 2. Socket Setup (room 데이터 준비 후 연결 시작)
+        socketRef.current = await setupSocket()
+          .catch((error) => {
+            console.log('Socket setup error:', error);
+            router.push('/_error');
+          });
+
         // 3. Setup Event Listeners
-        if (mountedRef.current) {
+        if (mountedRef.current && socketRef.current) {
           setupEventListeners();
         }
 
