@@ -22,6 +22,11 @@ class SocketService {
   }
 
   async connect(options = {}) {
+    // forceNew가 명시된 경우 기존 소켓을 확실히 종료해 FD 누적을 방지
+    if (options.forceNew && this.socket) {
+      this.cleanup(CLEANUP_REASONS.RECONNECT);
+    }
+
     if (this.connectionPromise) {
       return this.connectionPromise;
     }
@@ -54,7 +59,7 @@ class SocketService {
           });
         }
 
-        const { url, ...restOptions } = options;
+        const { url, forceNew, ...restOptions } = options;
 
         this.socket = io(socketUrl, {
           transports: ['websocket'],
@@ -165,12 +170,22 @@ class SocketService {
       this.messageQueue = [];
     }
 
-    if (reason === CLEANUP_REASONS.MANUAL && this.socket) {
-      this.socket.disconnect();
+    // RECONNECT 및 MANUAL 모두에서 기존 소켓을 정리해 FD 누적을 방지
+    if (this.socket) {
+      try {
+        this.socket.removeAllListeners();
+      } catch (e) {
+        // ignore listener cleanup errors
+      }
+      try {
+        this.socket.disconnect();
+      } catch (e) {
+        // ignore disconnect errors
+      }
       this.socket = null;
     }
 
-    if (reason === CLEANUP_REASONS.MANUAL) {
+    if (reason === CLEANUP_REASONS.MANUAL || reason === CLEANUP_REASONS.RECONNECT) {
       this.reconnectAttempts = 0;
       this.isReconnecting = false;
       this.connectionPromise = null;
