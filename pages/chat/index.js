@@ -121,7 +121,7 @@ const TableWrapper = ({ children, onScroll, loadingMore, hasMore, rooms }) => {
       {loadingMore && (
         <Box
           padding="$300"
-          borderTop="1px solid var(--vapor-color-border-normal)"
+          style={{ borderTop: "1px solid var(--vapor-color-border-normal)" }}
         >
           <LoadingIndicator text="추가 채팅방을 불러오는 중..." />
         </Box>
@@ -129,7 +129,7 @@ const TableWrapper = ({ children, onScroll, loadingMore, hasMore, rooms }) => {
       {!hasMore && rooms?.length > 0 && (
         <Box
           padding="$300"
-          borderTop="1px solid var(--vapor-color-border-normal)"
+          style={{ borderTop: "1px solid var(--vapor-color-border-normal)" }}
           textAlign="center"
         >
           <Text typography="body2">
@@ -243,46 +243,82 @@ function ChatRoomsComponent() {
   }, [isRetrying, retryCount, getRetryDelay]);
 
   const attemptConnection = useCallback(async (retryAttempt = 0) => {
-    try {
-      setConnectionStatus(CONNECTION_STATUS.CONNECTING);
+      const startTs = Date.now();
 
-      const response = await axiosInstance.get('/api/health', {
-        timeout: 5000,
-        retries: 1
+      // 1) 헬스 체크 시작 시점 확인
+      console.log('[healthcheck:start]', {
+          ts: startTs,
+          retryAttempt,
+          skip: process.env.NEXT_PUBLIC_SKIP_HEALTHCHECK
       });
 
-      // 401 응답은 인증 만료를 의미
-      if (response?.status === 401) {
-        setConnectionStatus(CONNECTION_STATUS.ERROR);
-        throw new Error('AUTH_EXPIRED');
+      try {
+          setConnectionStatus(CONNECTION_STATUS.CONNECTING);
+
+          const response = await axiosInstance.get('/api/health', {
+              timeout: 5000,
+              retries: 1
+          });
+
+          const durationMs = Date.now() - startTs;
+
+          // 2) 헬스 체크 결과 확인
+          console.log('[healthcheck:result]', {
+              ts: Date.now(),
+              ok: response?.data?.status === 'ok',
+              status: response?.status,
+              durationMs
+          });
+
+          // 401 인증 만료
+          if (response?.status === 401) {
+              setConnectionStatus(CONNECTION_STATUS.ERROR);
+              throw new Error('AUTH_EXPIRED');
+          }
+
+          const isConnected = response?.data?.status === 'ok' && response?.status === 200;
+
+          if (isConnected) {
+              setConnectionStatus(CONNECTION_STATUS.CONNECTED);
+              setRetryCount(0);
+
+              // 3) 방 목록 가져오기 직전
+              console.log('[rooms:fetch:start]', { ts: Date.now() });
+
+              return true;
+          }
+
+          throw new Error('Server not ready');
+
+      } catch (error) {
+          const durationMs = Date.now() - startTs;
+
+          // 4) 헬스 체크 에러 로그
+          console.warn('[healthcheck:error]', {
+              retryAttempt,
+              durationMs,
+              message: error?.message,
+              status: error?.response?.status
+          });
+
+          if (error.response?.status === 401 || error.message === 'AUTH_EXPIRED') {
+              setConnectionStatus(CONNECTION_STATUS.ERROR);
+              throw new Error('AUTH_EXPIRED');
+          }
+
+          if (!error.response && retryAttempt < RETRY_CONFIG.maxRetries) {
+              console.warn('[healthcheck:retry]', retryAttempt + 1);
+              const delay = getRetryDelay(retryAttempt);
+              await new Promise(resolve => setTimeout(resolve, delay));
+              return attemptConnection(retryAttempt + 1);
+          }
+
+          setConnectionStatus(CONNECTION_STATUS.ERROR);
+          throw new Error('SERVER_UNREACHABLE');
       }
-
-      const isConnected = response?.data?.status === 'ok' && response?.status === 200;
-
-      if (isConnected) {
-        setConnectionStatus(CONNECTION_STATUS.CONNECTED);
-        setRetryCount(0);
-        return true;
-      }
-
-      throw new Error('Server not ready');
-    } catch (error) {
-      // 401 에러는 인증 만료 - 재시도 없이 즉시 실패
-      if (error.response?.status === 401 || error.message === 'AUTH_EXPIRED') {
-        setConnectionStatus(CONNECTION_STATUS.ERROR);
-        throw new Error('AUTH_EXPIRED');
-      }
-
-      if (!error.response && retryAttempt < RETRY_CONFIG.maxRetries) {
-        const delay = getRetryDelay(retryAttempt);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        return attemptConnection(retryAttempt + 1);
-      }
-
-      setConnectionStatus(CONNECTION_STATUS.ERROR);
-      throw new Error('SERVER_UNREACHABLE');
-    }
   }, [getRetryDelay]);
+
+
 
   const fetchRooms = useCallback(async (isLoadingMore = false) => {
     if (!currentUser?.token || isLoadingRef.current) {
@@ -786,7 +822,6 @@ function ChatRoomsComponent() {
       </VStack>
     </Box>
   );
-
 }
 
 
