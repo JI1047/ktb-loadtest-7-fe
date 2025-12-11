@@ -218,19 +218,6 @@ class FileService {
     return `${parseFloat((bytes / Math.pow(1024, i)).toFixed(2))} ${units[i]}`;
   }
 
-  getHeaders(token, sessionId) {
-    if (!token || !sessionId) {
-      return {
-        'Accept': 'application/json, */*'
-      };
-    }
-    return {
-      'x-auth-token': token,
-      'x-session-id': sessionId,
-      'Accept': 'application/json, */*'
-    };
-  }
-
   handleUploadError(error) {
     console.error('Upload error:', error);
 
@@ -387,38 +374,6 @@ class FileService {
       default:
         return '알 수 없는 오류가 발생했습니다.';
     }
-  }
-
-  isRetryableError(error) {
-    if (!error.response) {
-      return true; // 네트워크 오류는 재시도 가능
-    }
-
-    const status = error.response.status;
-    return [408, 429, 500, 502, 503, 504].includes(status);
-  }
-
-  normalizePresignedUrl(url) {
-    if (!url) return url;
-    try {
-      const currentProtocol = typeof window !== 'undefined' ? window.location.protocol : null;
-      if (currentProtocol === 'https:' && url.startsWith('http://')) {
-        return url.replace('http://', 'https://');
-      }
-      return url;
-    } catch (err) {
-      return url;
-    }
-  }
-
-  cleanHeaders(headers = {}) {
-    const cleaned = {};
-    Object.entries(headers || {}).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== '') {
-        cleaned[key] = value;
-      }
-    });
-    return cleaned;
   }
 }
 

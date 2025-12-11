@@ -362,10 +362,10 @@ const FileMessage = ({
             ${isMine ? 'text-blue-100' : 'text-white'}
           `}>
             {error && (
-              <div>{error}</div>
+              <div className="text-red-400 text-sm mb-2">{error}</div>
             )}
-            {!error && renderFilePreview()}
-            {!error && msg.content && (
+            {renderFilePreview()}
+            {msg.content && (
               <div className="mt-3 text-base leading-relaxed">
                 <MessageContent content={msg.content} />
               </div>
