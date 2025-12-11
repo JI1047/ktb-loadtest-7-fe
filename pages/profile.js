@@ -53,9 +53,8 @@ const Profile = () => {
     try {
       // 비밀번호 변경 처리
       if (formData.newPassword) {
-        await authService.changePassword(
-          '',
-          formData.newPassword,
+        await authService.updateProfile(
+            {name: formData.name, newPassword: formData.newPassword, confirmPassword: formData.confirmPassword},
           user.token,
           user.sessionId
         );
