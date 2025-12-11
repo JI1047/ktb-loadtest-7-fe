@@ -32,11 +32,8 @@ jobs:
           password: ${{ secrets.DOCKER_TOKEN }}
 
       - name: Build and Push Docker Image
-        working-directory: .
         run: |
-          docker build --platform linux/amd64 \
-            --build-arg NEXT_PUBLIC_API_URL=${{ secrets.FE_API_URL }} \
-            -t ${{ secrets.DOCKER_USERNAME }}/board-fe:latest .
+          docker build --platform linux/amd64 --build-arg NEXT_PUBLIC_API_URL=${{ secrets.FE_API_URL }} -t ${{ secrets.DOCKER_USERNAME }}/board-fe:latest .
           docker push ${{ secrets.DOCKER_USERNAME }}/board-fe:latest
 
 
