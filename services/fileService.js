@@ -74,59 +74,44 @@ class FileService {
     return { success: true };
   }
 
-  async uploadFile(file, onProgress, token, sessionId) {
+  async uploadFile(file, onProgress) {
     const validationResult = await this.validateFile(file);
     if (!validationResult.success) {
       return validationResult;
     }
 
     try {
+      // 백엔드가 기대하는 multipart/form-data 업로드
       const formData = new FormData();
       formData.append('file', file);
 
-      const source = CancelToken.source();
-      this.activeUploads.set(file.name, source);
+      const cancelSource = CancelToken.source();
+      this.activeUploads.set(file.name, cancelSource);
 
-      const uploadUrl = this.baseUrl ?
-        `${this.baseUrl}/api/files/upload` :
-        '/api/files/upload';
-
-      // token과 sessionId는 axios 인터셉터에서 자동으로 추가되므로
-      // 여기서는 명시적으로 전달하지 않아도 됩니다
-      const response = await axiosInstance.post(uploadUrl, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        },
-        cancelToken: source.token,
-        withCredentials: true,
-        onUploadProgress: (progressEvent) => {
-          if (onProgress) {
-            const percentCompleted = Math.round(
-              (progressEvent.loaded * 100) / progressEvent.total
-            );
-            onProgress(percentCompleted);
-          }
+      const response = await axiosInstance.post('/api/files/upload', formData, {
+        // 브라우저가 boundary를 설정하도록 Content-Type은 명시적으로 지정
+        headers: { 'Content-Type': 'multipart/form-data' },
+        cancelToken: cancelSource.token,
+        onUploadProgress: (event) => {
+          if (!onProgress || !event.total) return;
+          const percent = Math.round((event.loaded * 100) / event.total);
+          onProgress(percent);
         }
       });
 
       this.activeUploads.delete(file.name);
 
-      if (!response.data || !response.data.success) {
+      if (!response?.data?.success || !response.data.file) {
         return {
           success: false,
-          message: response.data?.message || '파일 업로드에 실패했습니다.'
+          message: response?.data?.message || '파일 업로드에 실패했습니다.'
         };
       }
 
-      const fileData = response.data.file;
       return {
         success: true,
         data: {
-          ...response.data,
-          file: {
-            ...fileData,
-            url: this.getFileUrl(fileData.filename, true)
-          }
+          file: response.data.file
         }
       };
 
@@ -147,77 +132,51 @@ class FileService {
       return this.handleUploadError(error);
     }
   }
-  async downloadFile(filename, originalname, token, sessionId) {
+  getAuthQueryParams() {
+    if (typeof window === 'undefined') return '';
+
     try {
-      // 파일 존재 여부 먼저 확인
-      const downloadUrl = this.getFileUrl(filename, false);
-      // axios 인터셉터가 자동으로 인증 헤더를 추가합니다
-      const checkResponse = await axiosInstance.head(downloadUrl, {
-        validateStatus: status => status < 500,
-        withCredentials: true
-      });
+      const storedUser = localStorage.getItem('user');
+      if (!storedUser) return '';
 
-      if (checkResponse.status === 404) {
-        return {
-          success: false,
-          message: '파일을 찾을 수 없습니다.'
-        };
+      const { token, sessionId } = JSON.parse(storedUser);
+      const params = new URLSearchParams();
+
+      if (token) params.set('token', token);
+      if (sessionId) params.set('sessionId', sessionId);
+
+      const query = params.toString();
+      return query ? `?${query}` : '';
+    } catch (error) {
+      console.warn('Failed to read auth info from storage', error);
+      return '';
+    }
+  }
+
+  buildFileUrl(filename, inline = false) {
+    if (!filename) return '';
+
+    const sanitizedBase = (this.baseUrl || '').replace(/\/$/, '');
+    const encodedFilename = encodeURIComponent(filename);
+    const path = inline ? '/api/files/view/' : '/api/files/download/';
+    return `${sanitizedBase}${path}${encodedFilename}${this.getAuthQueryParams()}`;
+  }
+
+  async downloadFile(filename, originalname) {
+    try {
+      const targetUrl = this.buildFileUrl(filename, false);
+      if (!targetUrl) {
+        return { success: false, message: '파일명이 없습니다.' };
       }
 
-      if (checkResponse.status === 403) {
-        return {
-          success: false,
-          message: '파일에 접근할 권한이 없습니다.'
-        };
-      }
-
-      if (checkResponse.status !== 200) {
-        return {
-          success: false,
-          message: '파일 다운로드 준비 중 오류가 발생했습니다.'
-        };
-      }
-
-      // axios 인터셉터가 자동으로 인증 헤더를 추가합니다
-      const response = await axiosInstance({
-        method: 'GET',
-        url: downloadUrl,
-        responseType: 'blob',
-        timeout: 30000,
-        withCredentials: true
-      });
-
-      const contentType = response.headers['content-type'];
-      const contentDisposition = response.headers['content-disposition'];
-      let finalFilename = originalname;
-
-      if (contentDisposition) {
-        const filenameMatch = contentDisposition.match(
-          /filename\*=UTF-8''([^;]+)|filename="([^"]+)"|filename=([^;]+)/
-        );
-        if (filenameMatch) {
-          finalFilename = decodeURIComponent(
-            filenameMatch[1] || filenameMatch[2] || filenameMatch[3]
-          );
-        }
-      }
-
-      const blob = new Blob([response.data], {
-        type: contentType || 'application/octet-stream'
-      });
-
-      const blobUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = blobUrl;
-      link.download = finalFilename;
-      link.style.display = 'none';
+      link.href = targetUrl;
+      link.download = originalname || filename;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-
-      setTimeout(() => {
-        window.URL.revokeObjectURL(blobUrl);
-      }, 100);
 
       return { success: true };
 
@@ -230,29 +189,9 @@ class FileService {
     }
   }
 
-  getFileUrl(filename, forPreview = false) {
-    if (!filename) return '';
-
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
-    const endpoint = forPreview ? 'view' : 'download';
-    return `${baseUrl}/api/files/${endpoint}/${filename}`;
-  }
-
-  getPreviewUrl(file, token, sessionId, withAuth = true) {
+  async getPreviewUrl(file) {
     if (!file?.filename) return '';
-
-    const baseUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/files/view/${file.filename}`;
-
-    if (!withAuth) return baseUrl;
-
-    if (!token || !sessionId) return baseUrl;
-
-    // URL 객체 생성 전 프로토콜 확인
-    const url = new URL(baseUrl);
-    url.searchParams.append('token', encodeURIComponent(token));
-    url.searchParams.append('sessionId', encodeURIComponent(sessionId));
-
-    return url.toString();
+    return this.buildFileUrl(file.filename, true);
   }
 
   getFileType(filename) {
@@ -419,7 +358,7 @@ class FileService {
       this.activeUploads.delete(filename);
       canceledCount++;
     }
-    
+
     return {
       success: true,
       message: `${canceledCount}개의 업로드가 취소되었습니다.`,
@@ -457,6 +396,29 @@ class FileService {
 
     const status = error.response.status;
     return [408, 429, 500, 502, 503, 504].includes(status);
+  }
+
+  normalizePresignedUrl(url) {
+    if (!url) return url;
+    try {
+      const currentProtocol = typeof window !== 'undefined' ? window.location.protocol : null;
+      if (currentProtocol === 'https:' && url.startsWith('http://')) {
+        return url.replace('http://', 'https://');
+      }
+      return url;
+    } catch (err) {
+      return url;
+    }
+  }
+
+  cleanHeaders(headers = {}) {
+    const cleaned = {};
+    Object.entries(headers || {}).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        cleaned[key] = value;
+      }
+    });
+    return cleaned;
   }
 }
 

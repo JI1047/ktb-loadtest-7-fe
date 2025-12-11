@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState, forwardRef } from 'react';
-import { 
+import {
   LikeIcon,
   AttachFileOutlineIcon,
   SendIcon
@@ -42,13 +42,13 @@ const ChatInput = forwardRef(({
   const [uploadError, setUploadError] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [mentionPosition, setMentionPosition] = useState({ top: 0, left: 0 });
-  const submittingRef = useRef(false);
+
   const handleFileValidationAndPreview = useCallback(async (file) => {
     if (!file) return;
 
     try {
       await fileService.validateFile(file);
-      
+
       const filePreview = {
         file,
         url: URL.createObjectURL(file),
@@ -56,11 +56,11 @@ const ChatInput = forwardRef(({
         type: file.type,
         size: file.size
       };
-      
+
       setFiles(prev => [...prev, filePreview]);
       setUploadError(null);
       onFileSelect?.(file);
-      
+
     } catch (error) {
       console.error('File validation error:', error);
       setUploadError(error.message);
@@ -94,14 +94,10 @@ const ChatInput = forwardRef(({
   }, [handleFileValidationAndPreview]);
 
   const handleSubmit = useCallback(async (e) => {
-
-    if (submittingRef.current) return;
-    submittingRef.current = true;
-
     e?.preventDefault();
 
-    try {
-      if (files.length > 0) {
+    if (files.length > 0) {
+      try {
         const file = files[0];
         if (!file || !file.file) {
           throw new Error('파일이 선택되지 않았습니다.');
@@ -115,28 +111,19 @@ const ChatInput = forwardRef(({
 
         setMessage('');
         setFiles([]);
-      }
-      else if (message.trim()) {
-        onSubmit({
-          type: 'text',
-          content: message.trim()
-        });
-        setMessage('');
-      }
-    }
-    catch (error) {
-      console.error('File submit error:', error);
-      setUploadError(error.message);
-    }
-    finally {
-      // 동일 tick 안에서 중복 호출 방지
-      setTimeout(() => {
-        submittingRef.current = false;
-      }, 0);
-    }
 
+      } catch (error) {
+        console.error('File submit error:', error);
+        setUploadError(error.message);
+      }
+    } else if (message.trim()) {
+      onSubmit({
+        type: 'text',
+        content: message.trim()
+      });
+      setMessage('');
+    }
   }, [files, message, onSubmit, setMessage]);
-
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -156,9 +143,9 @@ const ChatInput = forwardRef(({
       if (!items) return;
 
       const fileItem = Array.from(items).find(
-        item => item.kind === 'file' && 
-        (item.type.startsWith('image/') || 
-         item.type.startsWith('video/') || 
+        item => item.kind === 'file' &&
+        (item.type.startsWith('image/') ||
+         item.type.startsWith('video/') ||
          item.type.startsWith('audio/') ||
          item.type === 'application/pdf')
       );
@@ -192,7 +179,7 @@ const ChatInput = forwardRef(({
     const lines = textBeforeAt.split('\n');
     const currentLineIndex = lines.length - 1;
     const currentLineText = lines[currentLineIndex];
-    
+
     // Create a hidden div to measure exact text width
     const measureDiv = document.createElement('div');
     measureDiv.style.position = 'absolute';
@@ -205,11 +192,11 @@ const ChatInput = forwardRef(({
     measureDiv.style.letterSpacing = window.getComputedStyle(textarea).letterSpacing;
     measureDiv.style.textTransform = window.getComputedStyle(textarea).textTransform;
     measureDiv.textContent = currentLineText;
-    
+
     document.body.appendChild(measureDiv);
     const textWidth = measureDiv.offsetWidth;
     document.body.removeChild(measureDiv);
-    
+
     // Get textarea position and compute styles
     const textareaRect = textarea.getBoundingClientRect();
     const computedStyle = window.getComputedStyle(textarea);
@@ -217,18 +204,18 @@ const ChatInput = forwardRef(({
     const paddingTop = parseInt(computedStyle.paddingTop);
     const lineHeight = parseInt(computedStyle.lineHeight) || (parseFloat(computedStyle.fontSize) * 1.5);
     const scrollTop = textarea.scrollTop;
-    
+
     // Calculate exact position of @ symbol
     let left = textareaRect.left + paddingLeft + textWidth;
     // Position directly above the @ character (with small gap)
     let top = textareaRect.top + paddingTop + (currentLineIndex * lineHeight) - scrollTop;
-    
+
     // Ensure dropdown stays within viewport
     const dropdownWidth = 320; // Approximate width
     const dropdownHeight = 250; // Approximate height
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
-    
+
     // Adjust horizontal position if needed
     if (left + dropdownWidth > viewportWidth) {
       left = viewportWidth - dropdownWidth - 10;
@@ -236,10 +223,10 @@ const ChatInput = forwardRef(({
     if (left < 10) {
       left = 10;
     }
-    
+
     // Position dropdown 40px lower to be closer to the @ cursor
     top = top + 40; // Move 40px down from the cursor line
-    
+
     // If not enough space above, show below
     if (top - dropdownHeight < 10) {
       top = textareaRect.top + paddingTop + ((currentLineIndex + 1) * lineHeight) - scrollTop + 2;
@@ -247,7 +234,7 @@ const ChatInput = forwardRef(({
       // Show above - adjust top to account for dropdown height
       top = top - dropdownHeight;
     }
-    
+
     return { top, left };
   }, []);
 
@@ -262,19 +249,19 @@ const ChatInput = forwardRef(({
     if (lastAtSymbol !== -1) {
       const textAfterAt = textBeforeCursor.slice(lastAtSymbol + 1);
       const hasSpaceAfterAt = textAfterAt.includes(' ');
-      
+
       if (!hasSpaceAfterAt) {
         setMentionFilter(textAfterAt.toLowerCase());
         setShowMentionList(true);
         setMentionIndex(0);
-        
+
         // Calculate and set mention dropdown position
         const position = calculateMentionPosition(e.target, lastAtSymbol);
         setMentionPosition(position);
         return;
       }
     }
-    
+
     setShowMentionList(false);
   }, [onMessageChange, setMentionFilter, setShowMentionList, setMentionIndex, calculateMentionPosition]);
 
@@ -287,7 +274,7 @@ const ChatInput = forwardRef(({
     const lastAtSymbol = textBeforeCursor.lastIndexOf('@');
 
     if (lastAtSymbol !== -1) {
-      const newMessage = 
+      const newMessage =
         message.slice(0, lastAtSymbol) +
         `@${user.name} ` +
         textAfterCursor;
@@ -313,14 +300,14 @@ const ChatInput = forwardRef(({
       switch (e.key) {
         case 'ArrowDown':
           e.preventDefault();
-          setMentionIndex(prev => 
+          setMentionIndex(prev =>
             prev < participantsCount - 1 ? prev + 1 : 0
           );
           break;
 
         case 'ArrowUp':
           e.preventDefault();
-          setMentionIndex(prev => 
+          setMentionIndex(prev =>
             prev > 0 ? prev - 1 : participantsCount - 1
           );
           break;
@@ -368,11 +355,11 @@ const ChatInput = forwardRef(({
     if (!messageInputRef?.current) return;
 
     const cursorPosition = messageInputRef.current.selectionStart || message.length;
-    const newMessage = 
-      message.slice(0, cursorPosition) + 
-      emoji.native + 
+    const newMessage =
+      message.slice(0, cursorPosition) +
+      emoji.native +
       message.slice(cursorPosition);
-    
+
     setMessage(newMessage);
     setShowEmojiPicker(false);
 
@@ -449,7 +436,7 @@ const ChatInput = forwardRef(({
                   autoResize={true}
                   data-testid="chat-message-input"
                 />
-              
+
               <IconButton
                 size="xl"
                 onClick={handleSubmit}
@@ -500,7 +487,7 @@ const ChatInput = forwardRef(({
                 onClick={(e) => e.stopPropagation()}
                 className="absolute bottom-full left-0 z-1000"
               >
-                <EmojiPicker 
+                <EmojiPicker
                   onSelect={handleEmojiSelect}
                   emojiSize={20}
                   emojiButtonSize={36}

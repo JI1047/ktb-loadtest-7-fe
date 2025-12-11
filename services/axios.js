@@ -15,7 +15,7 @@ const RETRY_CONFIG = {
 
 // 기본 설정으로 axios 인스턴스 생성
 const axiosInstance = axios.create({
-  baseURL: API_BASE_URL ?? '/api',
+  baseURL: API_BASE_URL || 'http://localhost:5000',
   timeout: 30000,
   withCredentials: true,
   headers: {
@@ -24,10 +24,10 @@ const axiosInstance = axios.create({
   }
 });
 
-// 재시도 딜레이 계산 함수 
+// 재시도 딜레이 계산 함수
 const getRetryDelay = (retryCount) => {
   // 지수 백오프와 약간의 무작위성 추가
-  const delay = RETRY_CONFIG.initialDelayMs * 
+  const delay = RETRY_CONFIG.initialDelayMs *
     Math.pow(RETRY_CONFIG.backoffFactor, retryCount) *
     (1 + Math.random() * 0.1); // 지터 추가
   return Math.min(delay, RETRY_CONFIG.maxDelayMs);
@@ -36,22 +36,22 @@ const getRetryDelay = (retryCount) => {
 // 재시도 가능한 에러인지 판단하는 함수
 const isRetryableError = (error) => {
   if (!error) return false;
-  
+
   // 네트워크 에러 코드 확인
   if (error.code && RETRY_CONFIG.retryableErrors.includes(error.code)) {
     return true;
   }
-  
+
   // HTTP 상태 코드 확인
   if (error.response?.status && RETRY_CONFIG.retryableStatuses.includes(error.response.status)) {
     return true;
   }
-  
+
   // 응답이 없는 경우 (네트워크 에러)
   if (!error.response && error.request) {
     return true;
   }
-  
+
   return false;
 };
 
@@ -62,7 +62,7 @@ const pendingRequests = new Map();
 const cancelPendingRequests = (config) => {
   const requestKey = `${config.method}:${config.url}`;
   const previousRequest = pendingRequests.get(requestKey);
-  
+
   if (previousRequest) {
     previousRequest.cancel('Request canceled due to duplicate request');
     pendingRequests.delete(requestKey);
@@ -100,7 +100,7 @@ axiosInstance.interceptors.response.use(
     // 성공한 요청 제거
     const requestKey = `${response.config.method}:${response.config.url}`;
     pendingRequests.delete(requestKey);
-    
+
     return response;
   },
   async (error) => {
@@ -114,18 +114,18 @@ axiosInstance.interceptors.response.use(
 
     // 401 에러 (인증 만료) - localStorage 자동 삭제 및 로그아웃 처리
     if (error.response?.status === 401) {
-      
+
       // localStorage에서 사용자 정보 삭제
       if (typeof window !== 'undefined') {
         localStorage.removeItem('user');
         localStorage.removeItem('lastTokenVerification');
-        
+
         // 로그인 페이지로 리다이렉트 (현재 페이지가 로그인 페이지가 아닌 경우에만)
         if (window.location.pathname !== '/' && window.location.pathname !== '/login') {
           window.location.href = '/';
         }
       }
-      
+
       // 401 에러는 재시도하지 않고 즉시 반환
       const authError = new Error('인증이 만료되었습니다. 다시 로그인해주세요.');
       authError.status = 401;
@@ -158,13 +158,13 @@ axiosInstance.interceptors.response.use(
         '네트워크 연결을 확인하고 잠시 후 다시 시도해주세요.',
         error.code ? `(Error: ${error.code})` : ''
       ].filter(Boolean).join(' ');
-      
+
       customError.isNetworkError = true;
       customError.originalError = error;
       customError.status = 0;
       customError.code = error.code || 'NETWORK_ERROR';
       customError.config = config;
-      
+
       customError.retry = async () => {
         try {
           return await axiosInstance(config);
@@ -172,7 +172,7 @@ axiosInstance.interceptors.response.use(
           throw retryError;
         }
       };
-      
+
       throw customError;
     }
 

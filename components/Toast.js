@@ -66,12 +66,14 @@ const CalloutToast = ({ message, type }) => {
   const IconComponent = config.icon;
 
   return (
-    <Callout.Root colorPalette={config.colorPalette} data-testid={`toast-${type}`}>
-      <Callout.Icon>
-        <IconComponent />
-      </Callout.Icon>
-      {message}
-    </Callout.Root>
+    <div data-testid={`toast-${type}`} role="alert">
+      <Callout.Root colorPalette={config.colorPalette}>
+        <Callout.Icon>
+          <IconComponent />
+        </Callout.Icon>
+        {message}
+      </Callout.Root>
+    </div>
   );
 };
 

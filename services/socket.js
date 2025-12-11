@@ -211,6 +211,11 @@ class SocketService {
   //   }
   // }
 
+  handleSocketError(error) {
+    // Gracefully log socket errors; other listeners (e.g., per-page handlers) will handle user feedback
+    console.warn('Socket error event:', error);
+  }
+
   // startHeartbeat() {
   //   if (this.heartbeatInterval) {
   //     clearInterval(this.heartbeatInterval);

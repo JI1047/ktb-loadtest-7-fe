@@ -34,7 +34,7 @@ export const useMessageHandling = (socketRef, currentUser, router, handleSession
    setShowMentionList(false);
  }, []);
 
-  const handleLoadMore = useCallback(() => {
+ const handleLoadMore = useCallback(() => {
     if (!socketRef.current?.connected) {
       return;
     }
@@ -64,6 +64,22 @@ export const useMessageHandling = (socketRef, currentUser, router, handleSession
     });
   }, [socketRef, router?.query?.room, loadingMessages, messages, setLoadingMessages]);
 
+  // Listen for server-side message rejection (e.g., banned words) to surface toast immediately
+  const attachMessageRejectionListener = useCallback(() => {
+    if (!socketRef.current) return;
+
+    const handleError = (error) => {
+      if (error?.code === 'MESSAGE_REJECTED') {
+        Toast.error(
+          error.message || '금칙어가 포함되어 메시지를 전송할 수 없습니다.',
+          { toastId: 'toast-error' }
+        );
+      }
+    };
+
+    socketRef.current.once('error', handleError);
+  }, [socketRef]);
+
  const handleMessageSubmit = useCallback(async (messageData) => {
    if (!socketRef.current?.connected || !currentUser) {
      Toast.error('채팅 서버와 연결이 끊어졌습니다.');
@@ -77,7 +93,7 @@ export const useMessageHandling = (socketRef, currentUser, router, handleSession
    }
 
    try {
-      if (messageData.type === 'file') {
+     if (messageData.type === 'file') {
         setUploading(true);
         setUploadError(null);
         setUploadProgress(0);
@@ -93,6 +109,7 @@ export const useMessageHandling = (socketRef, currentUser, router, handleSession
          throw new Error(uploadResponse.message || '파일 업로드에 실패했습니다.');
        }
 
+       attachMessageRejectionListener();
        socketRef.current.emit('chatMessage', {
          room: roomId,
          type: 'file',
@@ -112,6 +129,7 @@ export const useMessageHandling = (socketRef, currentUser, router, handleSession
        setUploadProgress(0);
 
      } else if (messageData.content?.trim()) {
+       attachMessageRejectionListener();
        socketRef.current.emit('chatMessage', {
          room: roomId,
          type: 'text',
@@ -138,7 +156,7 @@ export const useMessageHandling = (socketRef, currentUser, router, handleSession
        setUploading(false);
      }
    }
- }, [currentUser, router, handleSessionError, socketRef]);
+ }, [currentUser, router, handleSessionError, socketRef, attachMessageRejectionListener]);
 
  const handleEmojiToggle = useCallback(() => {
    setShowEmojiPicker(prev => !prev);

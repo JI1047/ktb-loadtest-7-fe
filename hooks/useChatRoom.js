@@ -314,7 +314,10 @@ export const useChatRoom = () => {
 
       // 금칙어 메시지 거부 처리
       if (error?.code === 'MESSAGE_REJECTED') {
-        Toast.error(error.message || '금칙어가 포함되어 메시지를 전송할 수 없습니다.');
+        Toast.error(
+          error.message || '금칙어가 포함되어 메시지를 전송할 수 없습니다.',
+          { toastId: 'toast-error' }
+        );
         return;
       }
 

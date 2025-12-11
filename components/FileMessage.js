@@ -6,17 +6,23 @@ import {
   MusicIcon as Music,
   ErrorCircleIcon as AlertCircle
 } from '@vapor-ui/icons';
-import { Button, Callout, VStack, HStack } from '@vapor-ui/core';
+import { VStack, HStack } from '@vapor-ui/core';
 import CustomAvatar from './CustomAvatar';
 import MessageContent from './MessageContent';
 import MessageActions from './MessageActions';
 import FileActions from './FileActions';
 import ReadStatus from './ReadStatus';
 import fileService from '@/services/fileService';
-import { useAuth } from '@/contexts/AuthContext';
 
 const FileMessage = ({
-  msg = {},
+  msg = {
+    file: {
+      mimetype: '',
+      filename: '',
+      originalname: '',
+      size: 0
+    }
+  },
   isMine = false,
   currentUser = null,
   onReactionAdd,
@@ -24,20 +30,35 @@ const FileMessage = ({
   room = null,
   socketRef
 }) => {
-  const { user } = useAuth();
   const [error, setError] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
+  const [previewRetried, setPreviewRetried] = useState(false);
   const messageDomRef = useRef(null);
   useEffect(() => {
-    if (msg?.file) {
-      const url = fileService.getPreviewUrl(msg.file, user?.token, user?.sessionId, true);
-      setPreviewUrl(url);
-      console.debug('Preview URL generated:', {
-        filename: msg.file.filename,
-        url
-      });
-    }
-  }, [msg?.file, user?.token, user?.sessionId]);
+    let mounted = true;
+
+    const loadPreview = async () => {
+      if (!msg?.file?.filename) return;
+      setPreviewRetried(false);
+      try {
+        const url = await fileService.getPreviewUrl(msg.file);
+        if (mounted) {
+          setPreviewUrl(url);
+        }
+      } catch (err) {
+        if (mounted) {
+          setError(err.message || '미리보기를 불러올 수 없습니다.');
+          setPreviewUrl('');
+          setPreviewRetried(false);
+        }
+      }
+    };
+
+    loadPreview();
+    return () => {
+      mounted = false;
+    };
+  }, [msg?.file?.filename]);
 
   if (!msg?.file) {
     console.error('File data is missing:', msg);
@@ -67,14 +88,14 @@ const FileMessage = ({
   const getDecodedFilename = (encodedFilename) => {
     try {
       if (!encodedFilename) return 'Unknown File';
-      
+
       const base64 = encodedFilename
         .replace(/-/g, '+')
         .replace(/_/g, '/');
-      
+
       const pad = base64.length % 4;
       const paddedBase64 = pad ? base64 + '='.repeat(4 - pad) : base64;
-      
+
       if (paddedBase64.match(/^[A-Za-z0-9+/=]+$/)) {
         return Buffer.from(paddedBase64, 'base64').toString('utf8');
       }
@@ -102,25 +123,14 @@ const FileMessage = ({
     setError(null);
 
     try {
-      if (!msg.file?.filename) {
-        throw new Error('파일 정보가 없습니다.');
+      const result = await fileService.downloadFile(
+        msg.file?.filename,
+        msg.file?.originalname
+      );
+
+      if (!result.success) {
+        throw new Error(result.message || '파일 다운로드 중 오류가 발생했습니다.');
       }
-
-      if (!user?.token || !user?.sessionId) {
-        throw new Error('인증 정보가 없습니다.');
-      }
-
-      const baseUrl = fileService.getFileUrl(msg.file.filename, false);
-      const authenticatedUrl = `${baseUrl}?token=${encodeURIComponent(user?.token)}&sessionId=${encodeURIComponent(user?.sessionId)}&download=true`;
-      
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      iframe.src = authenticatedUrl;
-      document.body.appendChild(iframe);
-
-      setTimeout(() => {
-        document.body.removeChild(iframe);
-      }, 5000);
 
     } catch (error) {
       console.error('File download error:', error);
@@ -128,24 +138,18 @@ const FileMessage = ({
     }
   };
 
-  const handleViewInNewTab = (e) => {
+  const handleViewInNewTab = async (e) => {
     e.preventDefault();
     e.stopPropagation();
     setError(null);
 
     try {
-      if (!msg.file?.filename) {
-        throw new Error('파일 정보가 없습니다.');
+      const targetUrl = previewUrl || await fileService.getPreviewUrl(msg.file);
+      if (!targetUrl) {
+        throw new Error('미리보기 URL을 불러올 수 없습니다.');
       }
 
-      if (!user?.token || !user?.sessionId) {
-        throw new Error('인증 정보가 없습니다.');
-      }
-
-      const baseUrl = fileService.getFileUrl(msg.file.filename, true);
-      const authenticatedUrl = `${baseUrl}?token=${encodeURIComponent(user?.token)}&sessionId=${encodeURIComponent(user?.sessionId)}`;
-
-      const newWindow = window.open(authenticatedUrl, '_blank');
+      const newWindow = window.open(targetUrl, '_blank');
       if (!newWindow) {
         throw new Error('팝업이 차단되었습니다. 팝업 차단을 해제해주세요.');
       }
@@ -166,11 +170,13 @@ const FileMessage = ({
         );
       }
 
-      if (!user?.token || !user?.sessionId) {
-        throw new Error('인증 정보가 없습니다.');
+      if (!previewUrl) {
+        return (
+          <div className="flex items-center justify-center h-full bg-gray-100">
+            <Image className="w-8 h-8 text-gray-400" />
+          </div>
+        );
       }
-
-      const previewUrl = fileService.getPreviewUrl(msg.file, user?.token, user?.sessionId, true);
 
       return (
         <div className="bg-transparent-pattern">
@@ -186,6 +192,26 @@ const FileMessage = ({
                 error: e.error,
                 originalname
               });
+
+              // Try to refresh presigned URL once if it might have expired
+              if (!previewRetried) {
+                setPreviewRetried(true);
+                fileService.getPreviewUrl(msg.file)
+                  .then((url) => {
+                    if (url) {
+                      setPreviewUrl(url);
+                      setError(null);
+                    } else {
+                      setError('이미지를 불러올 수 없습니다.');
+                    }
+                  })
+                  .catch((err) => {
+                    console.error('Preview refresh failed:', err);
+                    setError(err.message || '이미지를 불러올 수 없습니다.');
+                  });
+                return;
+              }
+
               e.target.onerror = null;
               e.target.src = '/images/placeholder-image.png';
               setError('이미지를 불러올 수 없습니다.');
@@ -385,19 +411,6 @@ const FileMessage = ({
       </VStack>
     </div>
   );
-};
-
-FileMessage.defaultProps = {
-  msg: {
-    file: {
-      mimetype: '',
-      filename: '',
-      originalname: '',
-      size: 0
-    }
-  },
-  isMine: false,
-  currentUser: null
 };
 
 export default React.memo(FileMessage);
