@@ -41,6 +41,7 @@ const ChatInput = forwardRef(({
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isComposing, setIsComposing] = useState(false);
   const [mentionPosition, setMentionPosition] = useState({ top: 0, left: 0 });
 
   const handleFileValidationAndPreview = useCallback(async (file) => {
@@ -96,6 +97,9 @@ const ChatInput = forwardRef(({
   const handleSubmit = useCallback(async (e) => {
     e?.preventDefault();
 
+    // IME 입력 중에는 전송을 막아 중복 전송을 방지
+    if (isComposing) return;
+
     if (files.length > 0) {
       try {
         const file = files[0];
@@ -123,7 +127,7 @@ const ChatInput = forwardRef(({
       });
       setMessage('');
     }
-  }, [files, message, onSubmit, setMessage]);
+  }, [files, isComposing, message, onSubmit, setMessage]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -293,6 +297,11 @@ const ChatInput = forwardRef(({
   }, [message, setMessage, setShowMentionList, messageInputRef]);
 
   const handleKeyDown = useCallback((e) => {
+    // 한글 입력 등 IME 조합 중 Enter를 눌러도 전송되지 않도록 방지
+    if ((e.nativeEvent?.isComposing || isComposing) && e.key === 'Enter') {
+      return;
+    }
+
     if (showMentionList) {
       const participants = getFilteredParticipants(room); // room 객체 전달
       const participantsCount = participants.length;
@@ -343,6 +352,7 @@ const ChatInput = forwardRef(({
     showEmojiPicker,
     mentionIndex,
     getFilteredParticipants,
+    isComposing,
     handleMentionSelect,
     handleSubmit,
     setMentionIndex,
@@ -427,6 +437,8 @@ const ChatInput = forwardRef(({
                   value={message}
                   onChange={handleInputChange}
                   onKeyDown={handleKeyDown}
+                  onCompositionStart={() => setIsComposing(true)}
+                  onCompositionEnd={() => setIsComposing(false)}
                   placeholder={isDragging ? "파일을 여기에 놓아주세요." : "메시지를 입력하세요... (@를 입력하여 멘션, Shift + Enter로 줄바꿈)"}
                   disabled={isDisabled}
                   rows={1}
