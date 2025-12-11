@@ -183,15 +183,22 @@ class AuthService {
    * 프로필 업데이트 API 호출
    * 상태 업데이트는 AuthContext에서 처리
    */
-  async updateProfile(data, token, sessionId) {
+  async updateProfile({name, newPassword, confirmPassword}, token, sessionId) {
     try {
       if (!token) {
         throw new Error('인증 정보가 없습니다.');
       }
 
+      const body = {};
+      if (name) body.name = name;
+      if (newPassword) {
+          body.newPassword = newPassword;
+          body.confirmPassword = confirmPassword;
+      }
+
       const response = await axios.put(
         `${API_URL}/api/users/profile`,
-        data,
+        body,
         {
           headers: {
             'Content-Type': 'application/json',
@@ -215,48 +222,6 @@ class AuthService {
       throw this._handleError(error);
     }
   }
-
-  /**
-   * 비밀번호 변경 API 호출
-   */
-  async changePassword(currentPassword, newPassword, token, sessionId) {
-    try {
-      if (!token) {
-        throw new Error('인증 정보가 없습니다.');
-      }
-
-      const response = await axios.put(
-        `${API_URL}/api/users/profile`,
-        {
-          currentPassword,
-          newPassword
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'x-auth-token': token,
-            'x-session-id': sessionId
-          }
-        }
-      );
-
-      if (response.data?.success) {
-        return true;
-      }
-
-      throw new Error(response.data?.message || '비밀번호 변경에 실패했습니다.');
-
-    } catch (error) {
-      if (error.response?.status === 401) {
-        if (error.response.data?.message?.includes('비밀번호가 일치하지 않습니다')) {
-          throw new Error('현재 비밀번호가 일치하지 않습니다.');
-        }
-        throw new Error('인증이 만료되었습니다. 다시 로그인해주세요.');
-      }
-
-      throw this._handleError(error);
-    }
-  }  
 
   /**
    * @deprecated getCurrentUser는 더 이상 사용하지 않습니다.
