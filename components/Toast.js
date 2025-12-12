@@ -11,11 +11,17 @@ import {
 
 // react-toastify 기본 스타일 제거
 const toastStyles = `
+  .Toastify,
+  .Toastify__toast-container {
+    pointer-events: none !important;
+  }
+
   .Toastify__toast {
     background: transparent !important;
     box-shadow: none !important;
     padding: 0 !important;
     min-height: auto !important;
+    pointer-events: auto !important;
   }
   
   .Toastify__toast-body {
@@ -29,6 +35,11 @@ const toastStyles = `
   
   .Toastify__toast-icon {
     display: none !important;
+  }
+
+  .Toastify__progress-bar,
+  .Toastify__progress-bar--bg {
+    pointer-events: none !important;
   }
 `;
 
